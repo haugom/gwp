@@ -11,9 +11,21 @@ import (
 
 var Db *sql.DB
 
+const (
+	host     = "localhost"
+	port     = 5432
+	user     = "postgres"
+	password = ""
+	dbname   = "chitchat"
+)
+
 func init() {
+	log.Print("testing")
 	var err error
-	Db, err = sql.Open("postgres", "dbname=chitchat sslmode=disable")
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
+		"password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+	Db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
 		log.Fatal(err)
 	}
