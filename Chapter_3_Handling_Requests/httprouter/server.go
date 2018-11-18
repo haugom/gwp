@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/julienschmidt/httprouter"
+	"golang.org/x/net/http2"
 	"net/http"
 )
 
@@ -15,8 +16,9 @@ func main() {
 	mux.GET("/hello/:name", hello)
 
 	server := http.Server{
-		Addr:    "127.0.0.1:8080",
+		Addr:    "127.0.0.1:8081",
 		Handler: mux,
 	}
-	server.ListenAndServe()
+	http2.ConfigureServer(&server, &http2.Server{})
+	server.ListenAndServeTLS("ssl/gwp_chain.pem", "ssl/gwp-key.pem")
 }
