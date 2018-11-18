@@ -44,5 +44,5 @@ func main() {
 		WriteTimeout:   time.Duration(config.WriteTimeout * int64(time.Second)),
 		MaxHeaderBytes: 1 << 20,
 	}
-	server.ListenAndServe()
+	server.ListenAndServeTLS("ssl/gwp_chain.pem", "ssl/gwp-key.pem")
 }
