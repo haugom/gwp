@@ -17,6 +17,10 @@ func (h *WorldHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "World!")
 }
 
+func goHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Go!")
+}
+
 func main() {
 	hello := HelloHandler{}
 	world := WorldHandler{}
@@ -25,5 +29,6 @@ func main() {
 	}
 	http.Handle("/hello", &hello)
 	http.Handle("/world", &world)
+	http.HandleFunc("/go", goHandler)
 	server.ListenAndServe()
 }
