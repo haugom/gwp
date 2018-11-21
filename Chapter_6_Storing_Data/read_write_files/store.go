@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	data := []byte("Hello World!\n")
+	data := []byte("Hello Go programming World!\n")
 
 	// write to file and read from file using WriteFile and ReadFile
 	err := ioutil.WriteFile("data1", data, 0644)
