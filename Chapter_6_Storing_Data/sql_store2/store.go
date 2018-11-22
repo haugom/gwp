@@ -7,6 +7,14 @@ import (
 	_ "github.com/lib/pq"
 )
 
+const (
+	host     = "localhost"
+	port     = 5432
+	user     = "gwp"
+	password = ""
+	dbname   = "gwp"
+)
+
 type Post struct {
 	Id       int
 	Content  string
@@ -26,7 +34,10 @@ var Db *sql.DB
 // connect to the Db
 func init() {
 	var err error
-	Db, err = sql.Open("postgres", "user=gwp dbname=gwp password=gwp sslmode=disable")
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
+		"password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+	Db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
 		panic(err)
 	}
@@ -72,10 +83,12 @@ func (post *Post) Create() (err error) {
 func main() {
 	post := Post{Content: "Hello World!", Author: "Sau Sheong"}
 	post.Create()
+	fmt.Println(post)
 
 	// Add a comment
 	comment := Comment{Content: "Good post!", Author: "Joe", Post: &post}
 	comment.Create()
+	fmt.Println(comment)
 	readPost, _ := GetPost(post.Id)
 
 	fmt.Println(readPost)                  // {1 Hello World! Sau Sheong [{1 Good post! Joe 0xc20802a1c0}]}
