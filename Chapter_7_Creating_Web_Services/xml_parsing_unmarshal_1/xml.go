@@ -9,14 +9,14 @@ import (
 
 type Post struct {
 	XMLName xml.Name `xml:"post"`
-	Id      string   `xml:"id,attr"`
+	Id      int32   `xml:"id,attr"`
 	Content string   `xml:"content"`
 	Author  Author   `xml:"author"`
 	Xml     string   `xml:",innerxml"`
 }
 
 type Author struct {
-	Id   string `xml:"id,attr"`
+	Id   int32 `xml:"id,attr"`
 	Name string `xml:",chardata"`
 }
 
@@ -36,4 +36,13 @@ func main() {
 	var post Post
 	xml.Unmarshal(xmlData, &post)
 	fmt.Println(post)
+
+	fmt.Printf("xmlName -> %s\n", post.XMLName)
+	fmt.Printf("xml -> %s\n", post.Xml)
+	fmt.Printf("post id -> %d\n", post.Id)
+	fmt.Printf("content: %s\n", post.Content)
+	fmt.Printf("author id: %d\n", post.Author.Id)
+	fmt.Printf("author name: %s\n", post.Author.Name)
+	fmt.Println("---")
+	//fmt.Println(xml.Marshal(post))
 }
