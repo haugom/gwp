@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+const (
+	host     = "localhost"
+	port     = 5432
+	user     = "gwp"
+	password = ""
+	dbname   = "gwp"
+)
+
 type Post struct {
 	Id        int
 	Content   string
@@ -23,12 +31,15 @@ type Comment struct {
 	CreatedAt time.Time
 }
 
-var Db gorm.DB
+var Db * gorm.DB
 
 // connect to the Db
 func init() {
 	var err error
-	Db, err = gorm.Open("postgres", "user=gwp dbname=gwp password=gwp sslmode=disable")
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
+		"password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+	Db, err = gorm.Open("postgres", psqlInfo)
 	if err != nil {
 		panic(err)
 	}
