@@ -37,7 +37,7 @@ func main() {
 
 	decoder := xml.NewDecoder(xmlFile)
 	for {
-		t, err := decoder.Token()
+		token, err := decoder.Token()
 		if err == io.EOF {
 			break
 		}
@@ -46,7 +46,7 @@ func main() {
 			return
 		}
 
-		switch se := t.(type) {
+		switch se := token.(type) {
 		case xml.StartElement:
 			if se.Name.Local == "comment" {
 				var comment Comment

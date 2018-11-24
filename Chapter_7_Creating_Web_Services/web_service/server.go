@@ -1,11 +1,14 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"path"
 	"strconv"
 )
+
+const (newline = "\n")
 
 type Post struct {
 	Id      int    `json:"id"`
@@ -15,10 +18,21 @@ type Post struct {
 
 func main() {
 	server := http.Server{
-		Addr: ":8080",
+		Addr: ":8081",
 	}
+	http.HandleFunc("/post",  handlePostRequest)
 	http.HandleFunc("/post/", handleRequest)
 	server.ListenAndServe()
+}
+
+func handlePostRequest(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		handlePost(w, r)
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+	}
 }
 
 // main handler function
@@ -43,19 +57,27 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 // Retrieve a post
 // GET /post/1
 func handleGet(w http.ResponseWriter, r *http.Request) (err error) {
+	var output []byte
+	statusCode := http.StatusOK
 	id, err := strconv.Atoi(path.Base(r.URL.Path))
 	if err != nil {
 		return
 	}
 	post, err := retrieve(id)
-	if err != nil {
+	if err == sql.ErrNoRows {
+		statusCode = http.StatusNotFound
+		err = nil
+	} else if err != nil {
 		return
+	} else {
+		output, err = json.MarshalIndent(&post, "", "\t\t")
+		output = append(output, newline...)
 	}
-	output, err := json.MarshalIndent(&post, "", "\t\t")
 	if err != nil {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
 	w.Write(output)
 	return
 }

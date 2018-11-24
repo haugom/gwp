@@ -1,6 +1,7 @@
 {
   "id" : 1,
   "content" : "Hello World!",
+  "testing": "some static string",
   "author" : {
     "id" : 2,
     "name" : "Sau Sheong"

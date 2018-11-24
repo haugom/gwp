@@ -5,11 +5,11 @@
   <comments>
     <comment id="1">
       <content>Have a great day!</content>
-      <author>Adam</author>
+      <author id="3">Adam</author>
     </comment>
     <comment id="2">
       <content>How are you today?</content>
-      <author>Betty</author>
+      <author id="4">Betty</author>
     </comment>
   </comments>
 </post>

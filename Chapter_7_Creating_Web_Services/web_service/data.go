@@ -2,7 +2,16 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	_ "github.com/lib/pq"
+)
+
+const (
+	host     = "localhost"
+	port     = 5432
+	user     = "gwp"
+	password = ""
+	dbname   = "gwp"
 )
 
 var Db *sql.DB
@@ -10,7 +19,10 @@ var Db *sql.DB
 // connect to the Db
 func init() {
 	var err error
-	Db, err = sql.Open("postgres", "user=gwp dbname=gwp password=gwp sslmode=disable")
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
+		"password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+	Db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
 		panic(err)
 	}
@@ -19,7 +31,8 @@ func init() {
 // Get a single post
 func retrieve(id int) (post Post, err error) {
 	post = Post{}
-	err = Db.QueryRow("select id, content, author from posts where id = $1", id).Scan(&post.Id, &post.Content, &post.Author)
+	row := Db.QueryRow("select id, content, author from posts where id = $1", id)
+	err = row.Scan(&post.Id, &post.Content, &post.Author)
 	return
 }
 

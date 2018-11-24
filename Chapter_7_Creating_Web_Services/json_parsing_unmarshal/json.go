@@ -10,6 +10,7 @@ import (
 type Post struct {
 	Id       int       `json:"id"`
 	Content  string    `json:"content"`
+	NotThere string    `json:"nonexistant"`
 	Author   Author    `json:"author"`
 	Comments []Comment `json:"comments"`
 }
@@ -25,24 +26,37 @@ type Comment struct {
 	Author  string `json:"author"`
 }
 
-func main() {
-	jsonFile, err := os.Open("post.json")
+func jsonSlurp(fileName string) (jsonData []byte, err error) {
+	jsonFile, err := os.Open(fileName)
 	if err != nil {
 		fmt.Println("Error opening JSON file:", err)
-		return
+		return nil, err
 	}
 	defer jsonFile.Close()
-	jsonData, err := ioutil.ReadAll(jsonFile)
+	jsonData, err = ioutil.ReadAll(jsonFile)
 	if err != nil {
 		fmt.Println("Error reading JSON data:", err)
+		return nil, err
+	}
+	return jsonData, nil
+}
+
+func main() {
+	jsonData, err := jsonSlurp("post.json")
+	if err != nil {
+		fmt.Println(err)
 		return
 	}
-
 	fmt.Println(string(jsonData))
 	var post Post
-	json.Unmarshal(jsonData, &post)
+	err = json.Unmarshal(jsonData, &post)
+	if err != nil {
+		fmt.Println("Error unmarshal json data", err)
+		return
+	}
 	fmt.Println(post.Id)
 	fmt.Println(post.Content)
+	fmt.Println(post.NotThere)
 	fmt.Println(post.Author.Id)
 	fmt.Println(post.Author.Name)
 	fmt.Println(post.Comments[0].Id)

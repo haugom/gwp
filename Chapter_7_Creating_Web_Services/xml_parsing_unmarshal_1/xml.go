@@ -15,6 +15,13 @@ type Post struct {
 	Xml     string   `xml:",innerxml"`
 }
 
+type SimplePost struct {
+	XMLName xml.Name `xml:"post"`
+	Id      int32   `xml:"id,attr"`
+	Content string   `xml:"content"`
+	Author  Author   `xml:"author"`
+}
+
 type Author struct {
 	Id   int32 `xml:"id,attr"`
 	Name string `xml:",chardata"`
@@ -44,5 +51,14 @@ func main() {
 	fmt.Printf("author id: %d\n", post.Author.Id)
 	fmt.Printf("author name: %s\n", post.Author.Name)
 	fmt.Println("---")
-	//fmt.Println(xml.Marshal(post))
+
+	simplePost := SimplePost{
+		Id: post.Id,
+		XMLName: post.XMLName,
+		Content: post.Content,
+		Author: post.Author,
+	}
+
+	output, _ := xml.MarshalIndent(simplePost, "", "  ")
+	fmt.Printf("%s%s\n", xml.Header, string(output))
 }
