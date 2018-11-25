@@ -1,12 +1,12 @@
 package main
 
 import (
-	"encoding/json"	
+	"encoding/json"
+	. "gopkg.in/check.v1"
 	"net/http"
-	"net/http/httptest"	
+	"net/http/httptest"
+	"strings"
 	"testing"
-  "strings"
-  . "gopkg.in/check.v1"
 )
 
 type PostTestSuite struct {

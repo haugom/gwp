@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	. "gopkg.in/check.v1"
+	"gopkg.in/check.v1"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,20 +11,21 @@ import (
 type PostTestSuite struct {}
 
 func init() {
-	Suite(&PostTestSuite{})
+	check.Suite(&PostTestSuite{})
 }
 
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) { check.TestingT(t) }
 
-func (s *PostTestSuite) TestHandleGet(c *C) {
+func (s *PostTestSuite) TestHandleGet(c *check.C) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/post/", handleRequest(&FakePost{}))
 	writer := httptest.NewRecorder()
 	request, _ := http.NewRequest("GET", "/post/1", nil)
 	mux.ServeHTTP(writer, request)
 
-	c.Check(writer.Code, Equals, 200)
+	c.Check(writer.Code, check.Equals, 200)
 	var post Post
-	json.Unmarshal(writer.Body.Bytes(), &post)
-	c.Check(post.Id, Equals, 1)
+	bytes := writer.Body.Bytes()
+	json.Unmarshal(bytes, &post)
+	c.Check(post.Id, check.Equals, 1)
 }

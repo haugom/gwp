@@ -37,7 +37,7 @@ func TestPutPost(t *testing.T) {
 	mux.ServeHTTP(writer, request)
 
 	if writer.Code != 200 {
-		t.Error("Response code is %v", writer.Code)
+		t.Errorf("Response code is %v", writer.Code)
 	}
   
   if post.Content != "Updated post" {
