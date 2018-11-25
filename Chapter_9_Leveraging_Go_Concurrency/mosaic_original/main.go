@@ -23,7 +23,7 @@ func main() {
 	mux.HandleFunc("/", upload)
 	mux.HandleFunc("/mosaic", mosaic)
 	server := &http.Server{
-		Addr:    "127.0.0.1:8080",
+		Addr:    "127.0.0.1:8081",
 		Handler: mux,
 	}
 	// building up the source tile database
