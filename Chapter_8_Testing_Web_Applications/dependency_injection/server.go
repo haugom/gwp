@@ -20,13 +20,13 @@ func main() {
 	server := http.Server{
 		Addr: "127.0.0.1:8080",
 	}
-	http.HandleFunc("/post/", handleRequest(&Post{Db: db}))
+	http.HandleFunc("/post/", HandleRequest(&Post{Db: db}))
 	server.ListenAndServe()
 }
 
 
 // main handler function
-func handleRequest(t Text) http.HandlerFunc {
+func HandleRequest(t Text) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		switch r.Method {

@@ -10,7 +10,7 @@ import (
 
 func TestGetPost(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/post/", handleRequest(&FakePost{}))
+	mux.HandleFunc("/post/", HandleRequest(&FakePost{}))
 
 	writer := httptest.NewRecorder()
 	request, _ := http.NewRequest("GET", "/post/1", nil)
@@ -29,7 +29,7 @@ func TestGetPost(t *testing.T) {
 func TestPutPost(t *testing.T) {
 	mux := http.NewServeMux()
   post := &FakePost{}
-	mux.HandleFunc("/post/", handleRequest(post))
+	mux.HandleFunc("/post/", HandleRequest(post))
 
 	writer := httptest.NewRecorder()
 	json := strings.NewReader(`{"content":"Updated post","author":"Sau Sheong"}`)
