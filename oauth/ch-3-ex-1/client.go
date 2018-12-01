@@ -42,7 +42,7 @@ func main() {
 		TokenEndpoint: "http://localhost:9001/token",
 	}
 	accessToken = ""
-	scope = ""
+	scope = "foo bar"
 	errorMsg = ""
 	protectedResourceUrl = "http://localhost:9002/resource"
 	resource = ProtectedResource{}

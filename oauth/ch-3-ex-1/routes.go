@@ -29,6 +29,13 @@ func log(h http.HandlerFunc) http.HandlerFunc {
 
 func index(access_token * string, scope * string) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
+
+		if len(*access_token) == 0 {
+			writer.Header().Set("location", "/authorize")
+			writer.WriteHeader(http.StatusFound)
+			return
+		}
+
 		// Execute the template with a map as context
 		context := map[string]string {
 			"access_token": *access_token,
@@ -59,6 +66,7 @@ func authorize(writer http.ResponseWriter, request * http.Request) {
 	values.Set("client_id", client.ClientId)
 	values.Set("redirect_uri", client.RedirectURI[0])
 	values.Set("state", state)
+	values.Set("scope", scope)
 	encodedString := values.Encode()
 	redirectURI := fmt.Sprintf("%s?%s", authServer.AuthorizationEndpoint, encodedString)
 
@@ -151,13 +159,20 @@ func fetch_resource(writer http.ResponseWriter, request * http.Request) {
 	fmt.Println(string(bytes))
 	fmt.Println("--------------------------------")
 
-	responseBody := make([]byte, resp.ContentLength)
-	resp.Body.Read(responseBody)
-	err := json.Unmarshal(responseBody, &resource)
-	if err != nil {
-		fmt.Println(err)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		responseBody := make([]byte, resp.ContentLength)
+		resp.Body.Read(responseBody)
+		err := json.Unmarshal(responseBody, &resource)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		writer.Header().Set("location", "/data")
+		writer.WriteHeader(http.StatusFound)
+	} else {
+		errorMsg = fmt.Sprintf("server returned response code: %d", resp.StatusCode)
+		writer.Header().Set("location", "/error")
+		writer.WriteHeader(http.StatusFound)
 	}
 
-	writer.Header().Set("location", "/data")
-	writer.WriteHeader(http.StatusFound)
 }
