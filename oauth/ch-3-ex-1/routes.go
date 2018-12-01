@@ -42,7 +42,8 @@ func index(access_token * string, scope * string) http.HandlerFunc {
 
 func error(writer http.ResponseWriter, request *http.Request) {
 	templates := template.Must(template.ParseFiles("templates/client/error.html"))
-	templates.ExecuteTemplate(writer, "error.html", "")
+	templates.ExecuteTemplate(writer, "error.html", errorMsg)
+	errorMsg = ""
 }
 
 func data(writer http.ResponseWriter, request *http.Request) {
@@ -71,14 +72,16 @@ func callback(writer http.ResponseWriter, request * http.Request) {
 
 	error := values.Get("error")
 	if error != "" {
-		writer.Header().Set("location", fmt.Sprintf("/error?error=%s", error))
+		errorMsg = error
+		writer.Header().Set("location", "/error")
 		writer.WriteHeader(http.StatusFound)
 		return
 	}
 
 	callbackState := values.Get("state")
 	if callbackState != state {
-		writer.Header().Set("location", fmt.Sprintf("/error?error=%s", "State is incorrect"))
+		errorMsg = "State is incorrect"
+		writer.Header().Set("location", "/error")
 		writer.WriteHeader(http.StatusFound)
 		return
 	}
@@ -129,7 +132,8 @@ func callback(writer http.ResponseWriter, request * http.Request) {
 
 func fetch_resource(writer http.ResponseWriter, request * http.Request) {
 	if len(accessToken) == 0 {
-		writer.Header().Set("location", fmt.Sprintf("/error?error=%s", "access token is missing"))
+		errorMsg = "access token is missing"
+		writer.Header().Set("location", "/error")
 		writer.WriteHeader(http.StatusFound)
 		return
 	}

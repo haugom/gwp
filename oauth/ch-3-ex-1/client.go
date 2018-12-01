@@ -33,6 +33,7 @@ var protectedResourceUrl string
 var resource ProtectedResource
 var client Client
 var state string
+var errorMsg string
 
 func main() {
 
@@ -42,6 +43,7 @@ func main() {
 	}
 	accessToken = ""
 	scope = ""
+	errorMsg = ""
 	protectedResourceUrl = "http://localhost:9002/resource"
 	resource = ProtectedResource{}
 	client = Client{
