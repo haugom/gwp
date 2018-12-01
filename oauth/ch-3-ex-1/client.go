@@ -20,11 +20,19 @@ type Client struct {
 	RedirectURI []string	`json: "redirect_uris"`
 }
 
+type AccessResponse struct {
+	AccessToken 		string `json:"access_token"`
+	TokenType 			string `json:"token_type"`
+	Scope 				string `json:"scope"`
+}
+
 var authServer AuthServer
-var access_token string
+var accessToken string
 var scope string
+var protectedResourceUrl string
 var resource ProtectedResource
 var client Client
+var state string
 
 func main() {
 
@@ -32,8 +40,9 @@ func main() {
 		AuthorizationEndpoint: "http://localhost:9001/authorize",
 		TokenEndpoint: "http://localhost:9001/token",
 	}
-	access_token = ""
+	accessToken = ""
 	scope = ""
+	protectedResourceUrl = "http://localhost:9002/resource"
 	resource = ProtectedResource{}
 	client = Client{
 		ClientId: "oauth-client-1",
@@ -42,11 +51,12 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", index(&access_token, &scope))
+	mux.HandleFunc("/", index(&accessToken, &scope))
 	mux.HandleFunc("/error", error)
 	mux.HandleFunc("/data", data)
 	mux.HandleFunc("/authorize", log(authorize))
 	mux.HandleFunc("/callback", log(callback))
+	mux.HandleFunc("/fetch_resource", log(fetch_resource))
 
 	server := http.Server{
 		Addr: "127.0.0.1:9000",

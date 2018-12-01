@@ -52,10 +52,12 @@ func data(writer http.ResponseWriter, request *http.Request) {
 }
 
 func authorize(writer http.ResponseWriter, request * http.Request) {
+	state = pseudo_uuid()
 	values := (request.URL).Query()
 	values.Set("response_type", "code")
 	values.Set("client_id", client.ClientId)
 	values.Set("redirect_uri", client.RedirectURI[0])
+	values.Set("state", state)
 	encodedString := values.Encode()
 	redirectURI := fmt.Sprintf("%s?%s", authServer.AuthorizationEndpoint, encodedString)
 
@@ -70,6 +72,13 @@ func callback(writer http.ResponseWriter, request * http.Request) {
 	error := values.Get("error")
 	if error != "" {
 		writer.Header().Set("location", fmt.Sprintf("/error?error=%s", error))
+		writer.WriteHeader(http.StatusFound)
+		return
+	}
+
+	callbackState := values.Get("state")
+	if callbackState != state {
+		writer.Header().Set("location", fmt.Sprintf("/error?error=%s", "State is incorrect"))
 		writer.WriteHeader(http.StatusFound)
 		return
 	}
@@ -98,10 +107,53 @@ func callback(writer http.ResponseWriter, request * http.Request) {
 
 	resp, _ := httpClient.Do(r)
 	responseBody := make([]byte, resp.ContentLength)
-	numberOfBytes, err := resp.Body.Read(responseBody)
+	_, err := resp.Body.Read(responseBody)
+	bytes, _ := httputil.DumpResponse(resp, true)
+	fmt.Println("----response--------------------")
+	fmt.Println(string(bytes))
+	fmt.Println("--------------------------------")
 
-	response, _ := httputil.DumpResponse(resp, true)
-	fmt.Printf("Bytes read: %d, err: %v, data read: [%s]\n", numberOfBytes, err, string(responseBody))
-	fmt.Println(string(response))
-	writer.WriteHeader(http.StatusOK)
+	fmt.Println(string(responseBody))
+	accessResponse := AccessResponse{}
+	err = json.Unmarshal(responseBody, &accessResponse)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	accessToken = accessResponse.AccessToken
+	scope = accessResponse.Scope
+
+	writer.Header().Set("location", "/")
+	writer.WriteHeader(http.StatusFound)
+}
+
+func fetch_resource(writer http.ResponseWriter, request * http.Request) {
+	if len(accessToken) == 0 {
+		writer.Header().Set("location", fmt.Sprintf("/error?error=%s", "access token is missing"))
+		writer.WriteHeader(http.StatusFound)
+		return
+	}
+
+	apiUrl := protectedResourceUrl
+	data := url.Values{}
+	uri, _ := url.ParseRequestURI(apiUrl)
+	r, _ := http.NewRequest("POST", uri.String(), strings.NewReader(data.Encode()))
+	r.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+
+	httpClient := &http.Client{}
+	resp, _ := httpClient.Do(r)
+	bytes, _ := httputil.DumpResponse(resp, true)
+	fmt.Println("----response--------------------")
+	fmt.Println(string(bytes))
+	fmt.Println("--------------------------------")
+
+	responseBody := make([]byte, resp.ContentLength)
+	resp.Body.Read(responseBody)
+	err := json.Unmarshal(responseBody, &resource)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	writer.Header().Set("location", "/data")
+	writer.WriteHeader(http.StatusFound)
 }
