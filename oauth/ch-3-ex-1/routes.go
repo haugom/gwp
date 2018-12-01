@@ -169,10 +169,14 @@ func fetch_resource(writer http.ResponseWriter, request * http.Request) {
 
 		writer.Header().Set("location", "/data")
 		writer.WriteHeader(http.StatusFound)
+	} else if resp.StatusCode == 401 { // token expire or invalid
+		writer.Header().Set("location", "/authorize")
+		writer.WriteHeader(http.StatusFound)
 	} else {
 		errorMsg = fmt.Sprintf("server returned response code: %d", resp.StatusCode)
 		writer.Header().Set("location", "/error")
 		writer.WriteHeader(http.StatusFound)
 	}
+
 
 }
