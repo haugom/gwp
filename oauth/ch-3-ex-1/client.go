@@ -24,11 +24,13 @@ type AccessResponse struct {
 	AccessToken 		string `json:"access_token"`
 	TokenType 			string `json:"token_type"`
 	Scope 				string `json:"scope"`
+	RefreshToken		string `json:"refresh_token"`
 }
 
 var authServer AuthServer
 var accessToken string
 var scope string
+var refreshToken string
 var protectedResourceUrl string
 var resource ProtectedResource
 var client Client
@@ -41,8 +43,9 @@ func main() {
 		AuthorizationEndpoint: "http://localhost:9001/authorize",
 		TokenEndpoint: "http://localhost:9001/token",
 	}
-	accessToken = ""
+	accessToken = "987tghjkiu6trfghjuytrghj"
 	scope = "foo bar"
+	refreshToken = "j2r3oj32r23rmasd98uhjrk2o3i"
 	errorMsg = ""
 	protectedResourceUrl = "http://localhost:9002/resource"
 	resource = ProtectedResource{}
@@ -53,7 +56,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", index(&accessToken, &scope))
+	mux.HandleFunc("/", index(&accessToken, &scope, &refreshToken))
 	mux.HandleFunc("/error", error)
 	mux.HandleFunc("/data", data)
 	mux.HandleFunc("/authorize", log(authorize))

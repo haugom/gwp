@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -10,8 +9,6 @@ import (
 	"net/url"
 	"reflect"
 	"runtime"
-	"strconv"
-	"strings"
 )
 
 func log(h http.HandlerFunc) http.HandlerFunc {
@@ -27,11 +24,11 @@ func log(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func index(access_token * string, scope * string) http.HandlerFunc {
+func index(access_token * string, scope * string, refreshToken * string) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 
 		if len(*access_token) == 0 {
-			writer.Header().Set("location", "/authorize")
+			writer.Header().Set("location", "/fetch_resource")
 			writer.WriteHeader(http.StatusFound)
 			return
 		}
@@ -40,6 +37,7 @@ func index(access_token * string, scope * string) http.HandlerFunc {
 		context := map[string]string {
 			"access_token": *access_token,
 			"scope": *scope,
+			"refresh_token": *refreshToken,
 		}
 
 		templates := template.Must(template.ParseFiles("templates/client/index.html"))
@@ -70,8 +68,7 @@ func authorize(writer http.ResponseWriter, request * http.Request) {
 	encodedString := values.Encode()
 	redirectURI := fmt.Sprintf("%s?%s", authServer.AuthorizationEndpoint, encodedString)
 
-	writer.Header().Set("location", redirectURI)
-	writer.WriteHeader(http.StatusFound)
+	httpRedirect(writer, redirectURI)
 }
 
 func callback(writer http.ResponseWriter, request * http.Request) {
@@ -100,30 +97,14 @@ func callback(writer http.ResponseWriter, request * http.Request) {
 	data.Set("code", values.Get("code"))
 	data.Set("redirect_uri", client.RedirectURI[0])
 
-	clientString := fmt.Sprintf("%s:%s", client.ClientId, client.ClientSecret)
-	fmt.Println(clientString)
-	bearer := []byte(clientString)
-	encodedBearer := base64.StdEncoding.EncodeToString(bearer)
-	fmt.Println(encodedBearer)
-
-	httpClient := &http.Client{}
 	uri, _ := url.ParseRequestURI(apiUrl)
-	r, _ := http.NewRequest("POST", uri.String(), strings.NewReader(data.Encode()))
-	r.Header.Add("Authorization", fmt.Sprintf("Basic: %s", encodedBearer))
-	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	r.Header.Add("Content-Length", strconv.Itoa(len(data.Encode())))
+	r := createPostAndEncodeValues(uri, data)
+	addBearerAndContentType(r, encodeClientCredentials())
+	dumpRequestStdout(r)
 
-	requestBytes, _ := httputil.DumpRequestOut(r, true)
-	fmt.Println(string(requestBytes))
-
-	resp, _ := httpClient.Do(r)
+	resp := dumpResponseStdout(doHttpRequest(r))
 	responseBody := make([]byte, resp.ContentLength)
 	_, err := resp.Body.Read(responseBody)
-	bytes, _ := httputil.DumpResponse(resp, true)
-	fmt.Println("----response--------------------")
-	fmt.Println(string(bytes))
-	fmt.Println("--------------------------------")
-
 	fmt.Println(string(responseBody))
 	accessResponse := AccessResponse{}
 	err = json.Unmarshal(responseBody, &accessResponse)
@@ -134,49 +115,70 @@ func callback(writer http.ResponseWriter, request * http.Request) {
 	accessToken = accessResponse.AccessToken
 	scope = accessResponse.Scope
 
-	writer.Header().Set("location", "/")
-	writer.WriteHeader(http.StatusFound)
+	httpRedirect(writer, "/")
+}
+
+func tryRefreshToken(writer http.ResponseWriter, request * http.Request) {
+
+	apiUrl := authServer.TokenEndpoint
+	data := url.Values{}
+	data.Set("grant_type", "refresh_token")
+	data.Set("refresh_token", refreshToken)
+
+	uri, _ := url.ParseRequestURI(apiUrl)
+	r := createPostAndEncodeValues(uri, data)
+	addBearerAndContentType(r, encodeClientCredentials())
+	dumpRequestStdout(r)
+
+	resp := dumpResponseStdout(doHttpRequest(r))
+	responseBody := make([]byte, resp.ContentLength)
+	_, err := resp.Body.Read(responseBody)
+	accessResponse := AccessResponse{}
+
+	err = json.Unmarshal(responseBody, &accessResponse)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	accessToken = accessResponse.AccessToken
+	scope = accessResponse.Scope
+	refreshToken = accessResponse.RefreshToken
+
+	httpRedirect(writer, "/fetch_resource")
 }
 
 func fetch_resource(writer http.ResponseWriter, request * http.Request) {
+
 	if len(accessToken) == 0 {
-		errorMsg = "access token is missing"
-		writer.Header().Set("location", "/error")
-		writer.WriteHeader(http.StatusFound)
+		httpRedirect(writer, "authorize")
 		return
 	}
 
-	apiUrl := protectedResourceUrl
-	data := url.Values{}
-	uri, _ := url.ParseRequestURI(apiUrl)
-	r, _ := http.NewRequest("POST", uri.String(), strings.NewReader(data.Encode()))
-	r.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
-
-	httpClient := &http.Client{}
-	resp, _ := httpClient.Do(r)
-	bytes, _ := httputil.DumpResponse(resp, true)
-	fmt.Println("----response--------------------")
-	fmt.Println(string(bytes))
-	fmt.Println("--------------------------------")
+	r := makeAuthHeaderForProtectedResource()
+	dumpRequestStdout(r)
+	resp := dumpResponseStdout(doHttpRequest(r))
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		responseBody := make([]byte, resp.ContentLength)
-		resp.Body.Read(responseBody)
-		err := json.Unmarshal(responseBody, &resource)
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		writer.Header().Set("location", "/data")
-		writer.WriteHeader(http.StatusFound)
+		displayProtectedResource(resp, writer)
+		return
 	} else if resp.StatusCode == 401 { // token expire or invalid
-		writer.Header().Set("location", "/authorize")
-		writer.WriteHeader(http.StatusFound)
-	} else {
-		errorMsg = fmt.Sprintf("server returned response code: %d", resp.StatusCode)
-		writer.Header().Set("location", "/error")
-		writer.WriteHeader(http.StatusFound)
+		accessToken = "" // invalidate accessToken
+		if len(refreshToken) > 0 {
+			tryRefreshToken(writer, request)
+			return
+		}
 	}
 
+	errorMsg = fmt.Sprintf("server returned response code: %d", resp.StatusCode)
+	httpRedirect(writer, "/error")
+}
 
+func displayProtectedResource(resp *http.Response, writer http.ResponseWriter) {
+	responseBody := make([]byte, resp.ContentLength)
+	resp.Body.Read(responseBody)
+	err := json.Unmarshal(responseBody, &resource)
+	if err != nil {
+		fmt.Println(err)
+	}
+	httpRedirect(writer, "/data")
 }
