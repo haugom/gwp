@@ -11,6 +11,7 @@ import (
 	"net/http/httputil"
 	"os"
 	"strings"
+	"time"
 )
 
 const (newline = "\n")
@@ -27,18 +28,21 @@ type Token struct {
 	Scope []string `json:"scope"`
 }
 
+type Words struct {
+	Words []string `json:"words"`
+	Timestamp string `json:"timestamp"`
+}
+
 type accessToken struct {
 	token string
 }
 
 func main() {
-	protectedResource := ProtectedResource{
-		Name: "Protected Resource",
-		Description: "This data has been protected by OAuth 2.0",
-	}
+
+	words := Words{}
 
 	indexHandler := http.HandlerFunc(index)
-	protectedResourceHandler := http.HandlerFunc(protectedResource.resource)
+	wordsHandler := http.HandlerFunc(words.processWordCommand)
 	accessTokenHandler := accessToken{""}
 
 	stdChain := alice.New(myLoggingHandler, dumpRequest)
@@ -52,7 +56,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", stdChain.Then(indexHandler))
-	mux.Handle("/resource", protectedChain.Then(protectedResourceHandler))
+	mux.Handle("/words", protectedChain.Then(wordsHandler))
 
 	server := http.Server{
 		Addr: "127.0.0.1:9002",
@@ -97,7 +101,7 @@ func (c *accessToken) getAccessToken(h http.Handler) http.Handler {
 
 func (c *accessToken) validateToken(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		jsonFile, err := os.Open("/home/haugom/src/oauth-in-action-code/exercises/ch-4-ex-1/database.nosql")
+		jsonFile, err := os.Open("/home/haugom/src/oauth-in-action-code/exercises/ch-4-ex-2/database.nosql")
 		if err != nil {
 			fmt.Println("Error opening JSON file:", err)
 			return
@@ -136,3 +140,38 @@ func (c *ProtectedResource) resource(writer http.ResponseWriter, request *http.R
 	writer.WriteHeader(http.StatusOK)
 	writer.Write(output)
 }
+
+func (c *Words) processWordCommand(writer http.ResponseWriter, request *http.Request) {
+	switch request.Method {
+	case "GET":
+		c.get(writer, request)
+	case "POST":
+		c.post(writer, request)
+	case "DELETE":
+		c.delete(writer, request)
+	}
+}
+
+func (c *Words) get(writer http.ResponseWriter, request *http.Request) {
+	time.Now()
+	now := time.Now()
+	words := Words{Words: c.Words, Timestamp: now.String()}
+	output, _ := json.Marshal(&words)
+	writer.Write(output)
+}
+
+func (c *Words) post(writer http.ResponseWriter, request *http.Request) {
+	word := request.FormValue("word")
+	c.Words = append(c.Words, word)
+	writer.WriteHeader(http.StatusCreated)
+}
+
+func (c *Words) delete(writer http.ResponseWriter, request *http.Request) {
+	length := len(c.Words)
+	if length > 0 {
+		i := length-1
+		c.Words = append(c.Words[:i], c.Words[i+1:]...)
+	}
+	writer.WriteHeader(http.StatusNoContent)
+}
+
