@@ -7,19 +7,13 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/justinas/alice"
 	"html/template"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"os"
 	"strings"
 	"time"
 )
-
-const (newline = "\n")
-
-type ProtectedResource struct {
-	Name string `json:"name"`
-	Description string `json:"description"`
-}
 
 type Token struct {
 	AccessToken string `json:"access_token"`
@@ -33,17 +27,26 @@ type Words struct {
 	Timestamp string `json:"timestamp"`
 }
 
+type AppData struct {
+	Words Words
+	AccessToken *accessToken
+}
+
+type scope []string
+
 type accessToken struct {
-	token string
+	accessToken string
+	Scope       scope
 }
 
 func main() {
 
-	words := Words{}
 
+	appData := AppData{}
 	indexHandler := http.HandlerFunc(index)
-	wordsHandler := http.HandlerFunc(words.processWordCommand)
-	accessTokenHandler := accessToken{""}
+	wordsHandler := http.HandlerFunc(appData.processWordCommand)
+	accessTokenHandler := accessToken{"", scope{}}
+	appData.AccessToken = &accessTokenHandler
 
 	stdChain := alice.New(myLoggingHandler, dumpRequest)
 	protectedChain := alice.New(
@@ -89,11 +92,11 @@ func (c *accessToken) getAccessToken(h http.Handler) http.Handler {
 		auth := r.Header.Get("authorization")
 		fmt.Println(auth)
 		if len(auth) > 0 && strings.Index(strings.ToLower(auth), "bearer") == 0 {
-			c.token = auth[len("bearer "):len(auth)]
+			c.accessToken = auth[len("bearer "):len(auth)]
 		} else if len(r.FormValue("access_token")) > 0 {
-			c.token = r.FormValue("access_token")
+			c.accessToken = r.FormValue("access_token")
 		} else if len(r.URL.Query().Get("access_token")) > 0 {
-			c.token = r.URL.Query().Get("access_token")
+			c.accessToken = r.URL.Query().Get("access_token")
 		}
 		h.ServeHTTP(w, r)
 	})
@@ -112,11 +115,12 @@ func (c *accessToken) validateToken(h http.Handler) http.Handler {
 		for scanner.Scan() {
 			data := []byte(scanner.Text())
 			json.Unmarshal(data, &token)
-			if token.AccessToken == c.token {
+			if token.AccessToken == c.accessToken {
 				break
 			}
 		}
-		if token.AccessToken == c.token {
+		if token.AccessToken == c.accessToken {
+			c.Scope = token.Scope
 			h.ServeHTTP(w, r)
 		} else {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
@@ -126,52 +130,67 @@ func (c *accessToken) validateToken(h http.Handler) http.Handler {
 	})
 }
 
+type processWordRequest func(writer http.ResponseWriter, request *http.Request)
+
+func (c *AppData) requireScope(h processWordRequest, scope string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		isScopeRead := Contains(c.AccessToken.Scope, scope)
+		if isScopeRead {
+			log.Println("doing request")
+			h(w, r)
+		} else {
+			log.Println("forbidden")
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Bearer realm=localhost:9002, error=\"insufficient_scope\", scope=\"%s\"", scope))
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+	})
+}
+
 func index(writer http.ResponseWriter, request *http.Request) {
 	templates := template.Must(template.ParseFiles("templates/protectedResource/index.html"))
 	templates.ExecuteTemplate(writer, "index.html", nil)
 }
 
-func (c *ProtectedResource) resource(writer http.ResponseWriter, request *http.Request) {
-	output, err := json.MarshalIndent(&c, "", "\t")
-	output = append(output, newline...)
-	if err != nil {
-		return
-	}
-	writer.WriteHeader(http.StatusOK)
-	writer.Write(output)
-}
-
-func (c *Words) processWordCommand(writer http.ResponseWriter, request *http.Request) {
+func (c *AppData) processWordCommand(writer http.ResponseWriter, request *http.Request) {
 	switch request.Method {
 	case "GET":
-		c.get(writer, request)
+		c.requireScope(c.get, "read").ServeHTTP(writer,request)
 	case "POST":
-		c.post(writer, request)
+		c.requireScope(c.post, "write").ServeHTTP(writer,request)
 	case "DELETE":
-		c.delete(writer, request)
+		c.requireScope(c.delete, "delete").ServeHTTP(writer,request)
 	}
 }
 
-func (c *Words) get(writer http.ResponseWriter, request *http.Request) {
+func (c *AppData) get(writer http.ResponseWriter, request *http.Request) {
 	time.Now()
 	now := time.Now()
-	words := Words{Words: c.Words, Timestamp: now.String()}
+	words := Words{Words: c.Words.Words, Timestamp: now.String()}
 	output, _ := json.Marshal(&words)
 	writer.Write(output)
 }
 
-func (c *Words) post(writer http.ResponseWriter, request *http.Request) {
+func (c *AppData) post(writer http.ResponseWriter, request *http.Request) {
 	word := request.FormValue("word")
-	c.Words = append(c.Words, word)
+	c.Words.Words = append(c.Words.Words, word)
 	writer.WriteHeader(http.StatusCreated)
 }
 
-func (c *Words) delete(writer http.ResponseWriter, request *http.Request) {
-	length := len(c.Words)
+func (c *AppData) delete(writer http.ResponseWriter, request *http.Request) {
+	length := len(c.Words.Words)
 	if length > 0 {
 		i := length-1
-		c.Words = append(c.Words[:i], c.Words[i+1:]...)
+		c.Words.Words = append(c.Words.Words[:i], c.Words.Words[i+1:]...)
 	}
 	writer.WriteHeader(http.StatusNoContent)
 }
 
+func Contains(a []string, x string) bool {
+	for _, n := range a {
+		if x == n {
+			return true
+		}
+	}
+	return false
+}
