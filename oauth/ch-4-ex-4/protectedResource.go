@@ -162,13 +162,37 @@ func index(writer http.ResponseWriter, request *http.Request) {
 
 func (c *AppData) favorites(writer http.ResponseWriter, request *http.Request) {
 	var user UserObject
+	var userSource UserObject
+	var isRealUser = c.AccessToken.Username == "alice" || c.AccessToken.Username == "bob"
 	if c.AccessToken.Username == "alice" {
-		user = UserObject{"Alice", aliceFavorites}
+		userSource = UserObject{User: "Alice", Favorites:aliceFavorites}
+		user.User = userSource.User
 	} else if c.AccessToken.Username == "bob" {
-		user = UserObject{"Bob", bobFavorites}
+		userSource = UserObject{User: "Bob", Favorites:bobFavorites}
+		user.User = userSource.User
 	} else {
 		user = UserObject{User: "Unknown"}
 	}
+
+	if isRealUser && Contains(c.AccessToken.Scope, "movies") {
+		user.Favorites.Movies = userSource.Favorites.Movies
+	}
+	if isRealUser && Contains(c.AccessToken.Scope, "foods") {
+		user.Favorites.Foods = userSource.Favorites.Foods
+	}
+	if isRealUser && Contains(c.AccessToken.Scope, "music") {
+		user.Favorites.Music = userSource.Favorites.Music
+	}
+
 	output, _ := json.Marshal(&user)
 	writer.Write(output)
+}
+
+func Contains(a []string, x string) bool {
+	for _, n := range a {
+		if x == n {
+			return true
+		}
+	}
+	return false
 }
