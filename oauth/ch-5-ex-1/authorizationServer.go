@@ -2,21 +2,26 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gorilla/handlers"
 	"github.com/justinas/alice"
 	"html/template"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"os"
+	"time"
 )
 type redirectURIS []string
 
 type client struct {
+	Name string `json:"name"`
 	ClientID string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
 	RedirectURIS redirectURIS `json:"redirect_uris"`
+	LogoURI string `json:"logo_uri"`
 }
 
 type clients map[string]client
@@ -31,16 +36,36 @@ type myError struct {
 	error string `json:"error"`
 }
 
-var currentError myError
+type AuthData struct {
+	Client client
+	ReqId string
+}
+
+var seededRand *rand.Rand = rand.New(
+	rand.NewSource(time.Now().UnixNano()))
+
+
+const charset = "abcdefghijklmnopqrstuvwxyz" +
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func StringWithCharset(length int, charset string) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
 
 func main() {
 
-	currentError = myError{}
 	myClients = clients{
 		"oauth-client-1": {
+			"oauth client 1",
 			"oauth-client-1",
 			"oauth-client-secret-1",
 			redirectURIS{"http://localhost:9000/callback"},
+			"",
 		},
 	}
 
@@ -50,7 +75,6 @@ func main() {
 
 	indexHandler := http.HandlerFunc(index)
 	errorHandler := http.HandlerFunc(error)
-	approveHandler := http.HandlerFunc(approve)
 	authorizeHandler := http.HandlerFunc(appData.authorize)
 
 	stdChain := alice.New(myLoggingHandler, dumpRequest)
@@ -58,11 +82,10 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/", stdChain.Then(indexHandler))
 	mux.Handle("/error", stdChain.Then(errorHandler))
-	mux.Handle("/approve", stdChain.Then(approveHandler))
 	mux.Handle("/authorize", stdChain.Then(authorizeHandler))
 
 	server := http.Server{
-		Addr: "127.0.0.1:9002",
+		Addr: "127.0.0.1:9001",
 		Handler:        mux,
 	}
 	server.ListenAndServe()
@@ -100,15 +123,35 @@ func error(writer http.ResponseWriter, request *http.Request) {
 	templates.ExecuteTemplate(writer, "error.html", nil)
 }
 
-func approve(writer http.ResponseWriter, request *http.Request) {
-	templates := template.Must(template.ParseFiles("templates/authorizationServer/approve.html"))
-	templates.ExecuteTemplate(writer, "approve.html", nil)
-}
-
 func (c *appData) authorize(writer http.ResponseWriter, request *http.Request) {
 	clientId := c.getClient(request.URL.Query().Get("client_id"))
 	if len(clientId.ClientID) == 0 {
-		request.Context()
+		output, _ := json.Marshal(&myError{error: "Unknown client"})
+		writer.Write(output)
+		return
+	} else if Contains(clientId.RedirectURIS, request.URL.Query().Get("redirect_uri")) == false {
+		output, _ := json.Marshal(&myError{error: "Invalid redirect URI"})
+		writer.Write(output)
+		return
 	}
 
+	authData := AuthData{clientId, StringWithCharset(10, charset)}
+	context := map[string]AuthData {
+		"auth": authData,
+	}
+
+	templates := template.Must(template.ParseFiles("templates/authorizationServer/approve.html"))
+	error := templates.ExecuteTemplate(writer, "approve.html", context)
+	if error != nil {
+		log.Println(error)
+	}
+}
+
+func Contains(a []string, x string) bool {
+	for _, n := range a {
+		if x == n {
+			return true
+		}
+	}
+	return false
 }

@@ -38,16 +38,16 @@
 
       <div class="jumbotron">
 		  <h2>Approve this client?</h2>
-		  <% if (client.client_name) { %>
-		  <p><b>Name:</b> <code><%- client.client_name %></code></p>
-		  <% } %>
-		  <p><b>ID:</b> <code><%- client.client_id %></code></p>
-		  <% if (client.client_uri) { %>
-		  <p><b>URI:</b> <code><%- client.client_uri %></code></p>
-		  <% } %>
-		  <% if (client.logo_uri) { %>
-		  <p><b>logo:</b> <img src="<%- client.logo_uri %>" /></p>
-		  <% } %>
+          {{ if .auth.Client.Name }}
+		  <p><b>Name:</b> <code>{{ .auth.Client.Name }}</code></p>
+          {{end}}
+		  <p><b>ID:</b> <code>{{ .auth.Client.ClientID }}</code></p>
+          {{ if .auth.Client.RedirectURIS }}
+		  <p><b>URI:</b> <code>{{ index .auth.Client.RedirectURIS 0 }}</code></p>
+          {{end}}
+          {{ if .auth.Client.LogoURI }}
+		  <p><b>logo:</b> <img src="{{ .auth.Client.LogoURI }}" /></p>
+          {{end}}
 		  
 		   <form class="form" action="/approve" method="POST">
 			   <input type="hidden" name="reqid" value="<%- reqid %>">
