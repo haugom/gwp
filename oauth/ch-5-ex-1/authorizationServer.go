@@ -47,6 +47,8 @@ type CodeMap map[string]AccessCode
 var codes CodeMap
 type RefreshTokenMap map[string]RefreshTokenResponse
 var refreshTokens RefreshTokenMap
+type AccessTokenMap map[string]AccessTokenResponse
+var accessTokens AccessTokenMap
 
 type appData struct {
 	clients *clientMap
@@ -79,6 +81,11 @@ type TokenResponse struct {
 type RefreshTokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
 	ClientID string `json:"client_id"`
+}
+
+type AccessTokenResponse struct {
+	AccessToken string
+	ClientID string
 }
 
 type AuthServer struct {
@@ -128,6 +135,7 @@ func main() {
 	requests = make(RequestMap, 10)
 	codes = make(CodeMap, 10)
 	refreshTokens = make(RefreshTokenMap, 10)
+	accessTokens = make(AccessTokenMap, 10)
 
 	appData := appData{clients:&allClients}
 
@@ -137,6 +145,7 @@ func main() {
 	authorizeHandler := http.HandlerFunc(appData.authorize)
 	approveHandler := http.HandlerFunc(appData.approve)
 	tokenHandler := http.HandlerFunc(appData.token)
+	tokensHandler := http.HandlerFunc(tokens)
 
 	stdChain := alice.New(myLoggingHandler, dumpRequest)
 
@@ -145,6 +154,7 @@ func main() {
 	mux.Handle("/authorize", stdChain.Then(authorizeHandler))
 	mux.Handle("/approve", stdChain.Then(approveHandler))
 	mux.Handle("/token", stdChain.Then(tokenHandler))
+	mux.Handle("/tokens", stdChain.Then(tokensHandler))
 
 	server := http.Server{
 		Addr: "127.0.0.1:9001",
@@ -360,6 +370,10 @@ func (c *appData) token(writer http.ResponseWriter, request *http.Request) {
 		outfile.WriteString("\n")
 
 		refreshTokens[refreshToken] = *refreshTokenResponse
+		accessTokens[accessToken] = AccessTokenResponse{
+			accessToken,
+			clientId,
+		}
 
 		writer.Header().Set("content-type", "application/json")
 		writer.Write(tokenResponseBytes)
@@ -407,6 +421,27 @@ func (c *appData) token(writer http.ResponseWriter, request *http.Request) {
 		}
 	}
 
+}
+
+func tokens(writer http.ResponseWriter, request *http.Request) {
+	tokensArray := make([]AccessTokenResponse, 0)
+	for _, value := range accessTokens {
+		tokensArray = append(tokensArray, value)
+	}
+	refreshTokensArray := make([]RefreshTokenResponse, 0)
+	for _, value := range refreshTokens {
+		refreshTokensArray = append(refreshTokensArray, value)
+	}
+	a := struct {
+		AccessTokens []AccessTokenResponse
+		RefreshTokens []RefreshTokenResponse
+	}{tokensArray, refreshTokensArray}
+
+	templates := template.Must(template.ParseFiles("templates/authorizationServer/tokens.html"))
+	e := templates.ExecuteTemplate(writer, "tokens.html", &a)
+	if e != nil {
+		log.Println(e)
+	}
 }
 
 func decodeCredentials(encodedCredentials string) (error, string, string) {
