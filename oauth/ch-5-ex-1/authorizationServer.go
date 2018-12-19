@@ -44,6 +44,8 @@ type AccessCode struct {
 
 type CodeMap map[string]AccessCode
 var codes CodeMap
+type RefreshTokenMap map[string]RefreshTokenResponse
+var refreshTokens RefreshTokenMap
 
 type appData struct {
 	clients *clientMap
@@ -70,6 +72,12 @@ type TokenResponse struct {
 	AccessToken string `json:"access_token"`
 	TokenType string `json"token_type"`
 	Expires int64 `json:"expires_in"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type RefreshTokenResponse struct {
+	RefreshToken string `json:"refresh_token"`
+	ClientID string `json:"client_id"`
 }
 
 var seededRand *rand.Rand = rand.New(
@@ -102,6 +110,7 @@ func main() {
 
 	requests = make(RequestMap, 10)
 	codes = make(CodeMap, 10)
+	refreshTokens = make(RefreshTokenMap, 10)
 
 	appData := appData{clients:&allClients}
 
@@ -261,7 +270,10 @@ func (c *appData) token(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	if request.FormValue("grant_type") != "authorization_code" {
+	grantType := request.FormValue("grant_type")
+	isAuthorizationCode := grantType == "authorization_code"
+	isRefreshToken := grantType == "refresh_token"
+	if !isAuthorizationCode && !isRefreshToken {
 		output, _ := json.Marshal(&myError{"unsupported_grant_type"})
 		writer.Header().Set("content-type", "application/json")
 		writer.WriteHeader(http.StatusBadRequest)
@@ -269,42 +281,98 @@ func (c *appData) token(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	code := codes[request.FormValue("code")]
-	if len(code.Code) == 0 {
-		output, _ := json.Marshal(&myError{"invalid_grant"})
+	if isAuthorizationCode {
+		code := codes[request.FormValue("code")]
+		if len(code.Code) == 0 {
+			output, _ := json.Marshal(&myError{"invalid_grant"})
+			writer.Header().Set("content-type", "application/json")
+			writer.WriteHeader(http.StatusBadRequest)
+			writer.Write(output)
+			return
+		}
+		delete(codes, request.FormValue("code"))
+
+		if code.ClientID != clientId {
+			output, _ := json.Marshal(&myError{"invalid_grant"})
+			writer.Header().Set("content-type", "application/json")
+			writer.WriteHeader(http.StatusBadRequest)
+			writer.Write(output)
+			return
+		}
+
+		m, _ := time.ParseDuration("10s")
+		now := time.Now()
+		now = now.Add(m)
+
+		accessToken := StringWithCharset(10, charset)
+		refreshToken := StringWithCharset(10, charset)
+		tokenResponse := &TokenResponse{
+			accessToken,
+			"Bearer",
+			now.Unix()*1000,
+			refreshToken,
+		}
+		refreshTokenResponse := &RefreshTokenResponse{
+			refreshToken,
+			code.ClientID,
+		}
+		tokenResponseBytes, _ := json.Marshal(tokenResponse)
+		refreshTokenResponseBytes, _ := json.Marshal(refreshTokenResponse)
+		outfile, _ := os.OpenFile(sharedAccessTokenDatabase, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
+		defer outfile.Close()
+		outfile.Write(tokenResponseBytes)
+		outfile.WriteString("\n")
+		outfile.Write(refreshTokenResponseBytes)
+		outfile.WriteString("\n")
+
+		refreshTokens[refreshToken] = *refreshTokenResponse
+
 		writer.Header().Set("content-type", "application/json")
-		writer.WriteHeader(http.StatusBadRequest)
-		writer.Write(output)
-		return
-	}
-	delete(codes, request.FormValue("code"))
-
-	if code.ClientID != clientId {
-		output, _ := json.Marshal(&myError{"invalid_grant"})
-		writer.Header().Set("content-type", "application/json")
-		writer.WriteHeader(http.StatusBadRequest)
-		writer.Write(output)
-		return
+		writer.Write(tokenResponseBytes)
 	}
 
-	m, _ := time.ParseDuration("10s")
-	now := time.Now()
-	now = now.Add(m)
+	if isRefreshToken {
+		token := refreshTokens[request.FormValue("refresh_token")]
+		if len(token.RefreshToken) > 0 {
+			if token.ClientID != clientId {
+				delete(refreshTokens, request.FormValue("refresh_token"))
+				output, _ := json.Marshal(&myError{"invalid_grant"})
+				writer.Header().Set("content-type", "application/json")
+				writer.WriteHeader(http.StatusBadRequest)
+				writer.Write(output)
+				return
+			}
 
-	randomToken := StringWithCharset(10, charset)
-	accessToken := &TokenResponse{
-		randomToken,
-		"Bearer",
-		now.Unix()*1000,
+			m, _ := time.ParseDuration("10s")
+			now := time.Now()
+			now = now.Add(m)
+
+			accessToken := StringWithCharset(10, charset)
+			refreshToken := token.RefreshToken
+			tokenResponse := &TokenResponse{
+				accessToken,
+				"Bearer",
+				now.Unix()*1000,
+				refreshToken,
+			}
+			outfile, _ := os.OpenFile(sharedAccessTokenDatabase, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
+			tokenResponseBytes, _ := json.Marshal(tokenResponse)
+			defer outfile.Close()
+			outfile.Write(tokenResponseBytes)
+			outfile.WriteString("\n")
+
+			writer.Header().Set("content-type", "application/json")
+			writer.Write(tokenResponseBytes)
+
+		} else {
+			output, _ := json.Marshal(&myError{"invalid_grant"})
+			writer.Header().Set("content-type", "application/json")
+			writer.WriteHeader(http.StatusBadRequest)
+			writer.Write(output)
+			return
+		}
 	}
-	output, _ := json.Marshal(accessToken)
-	outfile, _ := os.OpenFile(sharedAccessTokenDatabase, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
-	defer outfile.Close()
-	outfile.Write(output)
-	outfile.WriteString("\n")
 
-	writer.Header().Set("content-type", "application/json")
-	writer.Write(output)
 }
 
 func decodeCredentials(encodedCredentials string) (error, string, string) {
