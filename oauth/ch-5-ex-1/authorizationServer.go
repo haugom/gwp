@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/handlers"
@@ -13,6 +14,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 type redirectURIS []string
@@ -32,7 +34,12 @@ var allClients clientMap
 type RequestMap map[string]url.Values
 var requests RequestMap
 
-type CodeMap map[string]string
+type AccessCode struct {
+	Code string
+	ClientID string
+}
+
+type CodeMap map[string]AccessCode
 var codes CodeMap
 
 type appData struct {
@@ -43,9 +50,22 @@ type myError struct {
 	error string `json:"error"`
 }
 
+func (e * myError) Error() string {
+	return e.error
+}
+
+func New(text string) error {
+	return &myError{text}
+}
+
 type AuthData struct {
 	Client client
 	ReqId string
+}
+
+type TokenResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType string `json"token_type"`
 }
 
 var seededRand *rand.Rand = rand.New(
@@ -84,6 +104,7 @@ func main() {
 	indexHandler := http.HandlerFunc(index)
 	authorizeHandler := http.HandlerFunc(appData.authorize)
 	approveHandler := http.HandlerFunc(appData.approve)
+	tokenHandler := http.HandlerFunc(appData.token)
 
 	stdChain := alice.New(myLoggingHandler, dumpRequest)
 
@@ -91,6 +112,7 @@ func main() {
 	mux.Handle("/", stdChain.Then(indexHandler))
 	mux.Handle("/authorize", stdChain.Then(authorizeHandler))
 	mux.Handle("/approve", stdChain.Then(approveHandler))
+	mux.Handle("/token", stdChain.Then(tokenHandler))
 
 	server := http.Server{
 		Addr: "127.0.0.1:9001",
@@ -165,26 +187,116 @@ func (c *appData) approve(writer http.ResponseWriter, request *http.Request) {
 		(&myError{error: "No matching authrozation request"}).renderError(writer, request)
 		return
 	}
-	clientId := c.getClient(query.Get("client_id"))
+	client := c.getClient(query.Get("client_id"))
 	responseType := query.Get("response_type")
 	state := query.Get("state")
 
 	if len(approved) > 0 {
 		if responseType == "code" {
 			code := StringWithCharset(10, charset)
-			codes[code] = code
+			codes[code] = AccessCode{code, client.ClientID}
 
-			writer.Header().Set("location", fmt.Sprintf("%s?code=%s&state=%s", clientId.RedirectURIS[0], code, state))
+			writer.Header().Set("location", fmt.Sprintf("%s?code=%s&state=%s", client.RedirectURIS[0], code, state))
 			writer.WriteHeader(http.StatusFound)
 		} else {
-			writer.Header().Set("location", fmt.Sprintf("%s?error=unsupported_responste_type", clientId.RedirectURIS[0]))
+			writer.Header().Set("location", fmt.Sprintf("%s?error=unsupported_responste_type", client.RedirectURIS[0]))
 			writer.WriteHeader(http.StatusFound)
 		}
 	} else {
-		writer.Header().Set("location", fmt.Sprintf("%s?error=accedd_denied", clientId.RedirectURIS[0]))
+		writer.Header().Set("location", fmt.Sprintf("%s?error=accedd_denied", client.RedirectURIS[0]))
 		writer.WriteHeader(http.StatusFound)
 	}
 
+}
+
+func (c *appData) token(writer http.ResponseWriter, request *http.Request) {
+	auth := request.Header.Get("authorization")
+	var clientId string
+	var clientSecret string
+	var err error
+	if len(auth) > 0 && strings.Index(strings.ToLower(auth), "basic") == 0 {
+		encodedCredentials := auth[len("basic "):len(auth)]
+		err, clientId, clientSecret = decodeCredentials(encodedCredentials)
+		if err != nil {
+			output, _ := json.Marshal(&myError{error:err.Error()})
+			writer.Header().Set("content-type", "application/json")
+			writer.WriteHeader(http.StatusUnauthorized)
+			writer.Write(output)
+			return
+		}
+	}
+
+	if len(request.FormValue("client_id")) > 0 {
+		if len(clientId) > 0 {
+			output, _ := json.Marshal(&myError{"invalid_client"})
+			writer.Header().Set("content-type", "application/json")
+			writer.WriteHeader(http.StatusUnauthorized)
+			writer.Write(output)
+			return
+		}
+		clientId = request.FormValue("client_id")
+		clientSecret = request.FormValue("client_secret")
+	}
+
+	client := c.getClient(clientId)
+	if len(client.ClientID) == 0 {
+		output, _ := json.Marshal(&myError{"invalid_client"})
+		writer.Header().Set("content-type", "application/json")
+		writer.WriteHeader(http.StatusUnauthorized)
+		writer.Write(output)
+		return
+	}
+
+	if client.ClientSecret != clientSecret {
+		output, _ := json.Marshal(&myError{"invalid_client"})
+		writer.Header().Set("content-type", "application/json")
+		writer.WriteHeader(http.StatusUnauthorized)
+		writer.Write(output)
+		return
+	}
+
+	if request.FormValue("grant_type") != "authorization_code" {
+		output, _ := json.Marshal(&myError{"unsupported_grant_type"})
+		writer.Header().Set("content-type", "application/json")
+		writer.WriteHeader(http.StatusBadRequest)
+		writer.Write(output)
+		return
+	}
+
+	code := codes[request.FormValue("code")]
+	if len(code.Code) == 0 {
+		output, _ := json.Marshal(&myError{"invalid_grant"})
+		writer.Header().Set("content-type", "application/json")
+		writer.WriteHeader(http.StatusBadRequest)
+		writer.Write(output)
+		return
+	}
+	delete(codes, request.FormValue("code"))
+
+	if code.ClientID != clientId {
+		output, _ := json.Marshal(&myError{"invalid_grant"})
+		writer.Header().Set("content-type", "application/json")
+		writer.WriteHeader(http.StatusBadRequest)
+		writer.Write(output)
+		return
+	}
+
+	randomToken := StringWithCharset(10, charset)
+	output, _ := json.Marshal(&TokenResponse{randomToken, "Bearer"})
+	writer.Header().Set("content-type", "application/json")
+	writer.Write(output)
+}
+
+func decodeCredentials(encodedCredentials string) (error, string, string) {
+	data, err := base64.StdEncoding.DecodeString(encodedCredentials)
+	if err != nil {
+		return err, "", ""
+	}
+	credentialsAsSlice := strings.Split(string(data), ":")
+	if len(credentialsAsSlice) != 2 && len(credentialsAsSlice[0]) < 1 && len(credentialsAsSlice[1]) < 1 {
+		return New("invalid authorization header"), "", ""
+	}
+	return nil, credentialsAsSlice[0], credentialsAsSlice[1]
 }
 
 func Contains(a []string, x string) bool {
