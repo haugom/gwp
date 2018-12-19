@@ -42,6 +42,7 @@
 		  <ul>
 			  <li><b>access_token:</b> <code>{{ .AccessToken }}</code></li>
 			  <li><b>client_id:</b> <code>{{ .ClientID }}</code></li>
+              <a href="/access_token?token={{ .AccessToken }}"><button type="button" class="btn btn-danger">Danger</button></a>
 		   </ul>
           {{ end }}
           <h2>refresh tokens:</h2>
@@ -49,6 +50,7 @@
 		  <ul>
 			  <li><b>refresh_token:</b> <code>{{ .RefreshToken }}</code></li>
 			  <li><b>client_id:</b> <code>{{ .ClientID }}</code></li>
+              <a href="/refresh_token?token={{ .RefreshToken }}"><button type="button" class="btn btn-danger">Danger</button></a>
 		   </ul>
           {{ end }}
       </div>

@@ -146,6 +146,8 @@ func main() {
 	approveHandler := http.HandlerFunc(appData.approve)
 	tokenHandler := http.HandlerFunc(appData.token)
 	tokensHandler := http.HandlerFunc(tokens)
+	accessTokenHandler := http.HandlerFunc(deleteAccessToken)
+	refreshTokenHandler := http.HandlerFunc(deleteRefreshToken)
 
 	stdChain := alice.New(myLoggingHandler, dumpRequest)
 
@@ -155,6 +157,8 @@ func main() {
 	mux.Handle("/approve", stdChain.Then(approveHandler))
 	mux.Handle("/token", stdChain.Then(tokenHandler))
 	mux.Handle("/tokens", stdChain.Then(tokensHandler))
+	mux.Handle("/access_token", stdChain.Then(accessTokenHandler))
+	mux.Handle("/refresh_token", stdChain.Then(refreshTokenHandler))
 
 	server := http.Server{
 		Addr: "127.0.0.1:9001",
@@ -442,6 +446,20 @@ func tokens(writer http.ResponseWriter, request *http.Request) {
 	if e != nil {
 		log.Println(e)
 	}
+}
+
+func deleteAccessToken(writer http.ResponseWriter, request *http.Request) {
+	accessToken := request.URL.Query().Get("token")
+	delete(accessTokens, accessToken)
+	writer.Header().Set("location", "/tokens")
+	writer.WriteHeader(http.StatusFound)
+}
+
+func deleteRefreshToken(writer http.ResponseWriter, request *http.Request) {
+	refreshToken := request.URL.Query().Get("token")
+	delete(refreshTokens, refreshToken)
+	writer.Header().Set("location", "/tokens")
+	writer.WriteHeader(http.StatusFound)
 }
 
 func decodeCredentials(encodedCredentials string) (error, string, string) {
