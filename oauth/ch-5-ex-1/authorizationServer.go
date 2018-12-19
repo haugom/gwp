@@ -24,6 +24,7 @@ type redirectURIS []string
 
 type client struct {
 	Name string `json:"name"`
+	Scope string `json:"scope"`
 	ClientID string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
 	RedirectURIS redirectURIS `json:"redirect_uris"`
@@ -80,6 +81,11 @@ type RefreshTokenResponse struct {
 	ClientID string `json:"client_id"`
 }
 
+type AuthServer struct {
+	AuthorizationEndpoint string
+	TokenEndpoint string
+}
+
 var seededRand *rand.Rand = rand.New(
 	rand.NewSource(time.Now().UnixNano()))
 
@@ -100,13 +106,24 @@ func main() {
 
 	firstClient := client{
 		"oauth client 1",
+		"",
 		"oauth-client-1",
 		"oauth-client-secret-1",
 		redirectURIS{"http://localhost:9000/callback"},
 		"",
 	}
-	allClients = make(clientMap, 1)
+	secondClient := client{
+		"oauth client 2",
+		"",
+		"oauth-client-2",
+		"oauth-client-secret-2",
+		redirectURIS{"http://localhost:9000/callback", "http://localhost:9000/callback2"},
+		"",
+	}
+	allClients = make(clientMap, 2)
 	allClients["oauth-client-1"] = firstClient
+	allClients["oauth-client-2"] = secondClient
+	log.Println(allClients)
 
 	requests = make(RequestMap, 10)
 	codes = make(CodeMap, 10)
@@ -159,8 +176,25 @@ func myLoggingHandler(h http.Handler) http.Handler {
 }
 
 func index(writer http.ResponseWriter, request *http.Request) {
+	authServer := AuthServer{
+		"http://127.0.0.1:9001/authorization",
+		"http://127.0.0.1:9001/token",
+	}
+	clientsArray := make([]client, 0)
+	for _, value := range allClients {
+		log.Printf("Adding %s\n", value)
+		clientsArray = append(clientsArray, value)
+	}
+	a := struct {
+		AuthServer AuthServer
+		Clients []client
+	}{authServer, clientsArray}
+
 	templates := template.Must(template.ParseFiles("templates/authorizationServer/index.html"))
-	templates.ExecuteTemplate(writer, "index.html", nil)
+	e := templates.ExecuteTemplate(writer, "index.html", &a)
+	if e != nil {
+		log.Println(e)
+	}
 }
 
 func (e *myError) renderError(writer http.ResponseWriter, request *http.Request) {

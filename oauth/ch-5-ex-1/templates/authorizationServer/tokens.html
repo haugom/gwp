@@ -29,7 +29,7 @@
     <nav class="navbar navbar-inverse navbar-fixed-top">
       <div class="container">
         <div class="navbar-header">
-          <a class="navbar-brand" href="/">OAuth in Action: <span class="label label-danger">OAuth Authorization Server</span></a>
+          <a class="navbar-brand" href="/">OAuth in Action: <span class="label label-danger">OAuth Authorization Server</label></a>
         </div>
       </div>
     </nav>
@@ -38,20 +38,18 @@
 
       <div class="jumbotron">
 		  <h2>Client information:</h2>
-          {{ range .Clients }}
+		  <% _.each(clients, function(client) { %>
 		  <ul>
-			  <li><b>client_id:</b> <code>{{ .ClientID }}</code></li>
-			  <li><b>client_secret:</b> <code>{{ .ClientSecret }}</code></li>
-			  <li><b>scope:</b> <code>{{ .Scope }}</code></li>
-              {{ range .RedirectURIS }}
-                  <li><b>redirect_uri:</b> <code>{{ . }}</code></li>
-              {{ end }}
+			  <li><b>client_id:</b> <code><%- client.client_id %></code></li>
+			  <li><b>client_secret:</b> <code><%- client.client_secret %></code></li>
+			  <li><b>scope:</b> <code><%- client.scope %></code></li>
+			  <li><b>redirect_uri:</b> <code><%- client.redirect_uri %></code></li>
 		   </ul>
-          {{ end }}
+		   <% }); %>
 		   <h2>Server information:</h2>
 		  <ul>
-			  <li><b>authorization_endpoint:</b> <code>{{ .AuthServer.AuthorizationEndpoint }}</code></li>
-			  <li><b>token_endpoint:</b> <code>{{ .AuthServer.TokenEndpoint }}</code></li>
+			  <li><b>authorization_endpoint:</b> <code><%- authServer.authorizationEndpoint %></code></li>
+			  <li><b>token_endpoint:</b> <code><%- authServer.tokenEndpoint %></code></li>
 		   </ul>
       </div>
 
