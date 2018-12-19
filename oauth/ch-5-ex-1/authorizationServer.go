@@ -69,6 +69,7 @@ type AuthData struct {
 type TokenResponse struct {
 	AccessToken string `json:"access_token"`
 	TokenType string `json"token_type"`
+	Expires int64 `json:"expires_in"`
 }
 
 var seededRand *rand.Rand = rand.New(
@@ -286,8 +287,16 @@ func (c *appData) token(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
+	m, _ := time.ParseDuration("10s")
+	now := time.Now()
+	now = now.Add(m)
+
 	randomToken := StringWithCharset(10, charset)
-	accessToken := &TokenResponse{randomToken, "Bearer"}
+	accessToken := &TokenResponse{
+		randomToken,
+		"Bearer",
+		now.Unix()*1000,
+	}
 	output, _ := json.Marshal(accessToken)
 	outfile, _ := os.OpenFile(sharedAccessTokenDatabase, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
 	defer outfile.Close()
