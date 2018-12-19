@@ -24,13 +24,17 @@ type client struct {
 	LogoURI string `json:"logo_uri"`
 }
 
-type clients map[string]client
+type clientMap map[string]client
+
+var allClients clientMap
+
+type RequestMap map[string]string
+
+var requests RequestMap
 
 type appData struct {
-	clients * clients
+	clients *clientMap
 }
-
-var myClients clients
 
 type myError struct {
 	error string `json:"error"`
@@ -44,7 +48,6 @@ type AuthData struct {
 var seededRand *rand.Rand = rand.New(
 	rand.NewSource(time.Now().UnixNano()))
 
-
 const charset = "abcdefghijklmnopqrstuvwxyz" +
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
@@ -56,10 +59,9 @@ func StringWithCharset(length int, charset string) string {
 	return string(b)
 }
 
-
 func main() {
 
-	myClients = clients{
+	allClients = clientMap{
 		"oauth-client-1": {
 			"oauth client 1",
 			"oauth-client-1",
@@ -69,7 +71,9 @@ func main() {
 		},
 	}
 
-	appData := appData{clients:&myClients}
+	requests = make(RequestMap, 10)
+
+	appData := appData{clients:&allClients}
 
 	log.Println(appData.clients)
 
@@ -135,7 +139,9 @@ func (c *appData) authorize(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	authData := AuthData{clientId, StringWithCharset(10, charset)}
+	requestId := StringWithCharset(10, charset)
+	requests[requestId] = requestId
+	authData := AuthData{clientId, requestId}
 	context := map[string]AuthData {
 		"auth": authData,
 	}

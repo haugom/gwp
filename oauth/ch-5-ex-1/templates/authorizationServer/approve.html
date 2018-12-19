@@ -50,7 +50,7 @@
           {{end}}
 		  
 		   <form class="form" action="/approve" method="POST">
-			   <input type="hidden" name="reqid" value="<%- reqid %>">
+			   <input type="hidden" name="reqid" value="{{ .auth.ReqId }}">
 			   <input type="submit" class="btn btn-success" name="approve" value="Approve">
 			   <input type="submit" class="btn btn-danger" name="deny" value="Deny">
 		   </form>
