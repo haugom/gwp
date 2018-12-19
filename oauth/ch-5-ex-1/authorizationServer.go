@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"os"
 	"time"
 )
@@ -28,9 +29,11 @@ type clientMap map[string]client
 
 var allClients clientMap
 
-type RequestMap map[string]string
-
+type RequestMap map[string]url.Values
 var requests RequestMap
+
+type CodeMap map[string]string
+var codes CodeMap
 
 type appData struct {
 	clients *clientMap
@@ -61,32 +64,33 @@ func StringWithCharset(length int, charset string) string {
 
 func main() {
 
-	allClients = clientMap{
-		"oauth-client-1": {
-			"oauth client 1",
-			"oauth-client-1",
-			"oauth-client-secret-1",
-			redirectURIS{"http://localhost:9000/callback"},
-			"",
-		},
+	firstClient := client{
+		"oauth client 1",
+		"oauth-client-1",
+		"oauth-client-secret-1",
+		redirectURIS{"http://localhost:9000/callback"},
+		"",
 	}
+	allClients = make(clientMap, 1)
+	allClients["oauth-client-1"] = firstClient
 
 	requests = make(RequestMap, 10)
+	codes = make(CodeMap, 10)
 
 	appData := appData{clients:&allClients}
 
 	log.Println(appData.clients)
 
 	indexHandler := http.HandlerFunc(index)
-	errorHandler := http.HandlerFunc(error)
 	authorizeHandler := http.HandlerFunc(appData.authorize)
+	approveHandler := http.HandlerFunc(appData.approve)
 
 	stdChain := alice.New(myLoggingHandler, dumpRequest)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", stdChain.Then(indexHandler))
-	mux.Handle("/error", stdChain.Then(errorHandler))
 	mux.Handle("/authorize", stdChain.Then(authorizeHandler))
+	mux.Handle("/approve", stdChain.Then(approveHandler))
 
 	server := http.Server{
 		Addr: "127.0.0.1:9001",
@@ -122,16 +126,15 @@ func index(writer http.ResponseWriter, request *http.Request) {
 	templates.ExecuteTemplate(writer, "index.html", nil)
 }
 
-func error(writer http.ResponseWriter, request *http.Request) {
+func (e *myError) renderError(writer http.ResponseWriter, request *http.Request) {
 	templates := template.Must(template.ParseFiles("templates/authorizationServer/error.html"))
-	templates.ExecuteTemplate(writer, "error.html", nil)
+	templates.ExecuteTemplate(writer, "error.html", e.error)
 }
 
 func (c *appData) authorize(writer http.ResponseWriter, request *http.Request) {
 	clientId := c.getClient(request.URL.Query().Get("client_id"))
 	if len(clientId.ClientID) == 0 {
-		output, _ := json.Marshal(&myError{error: "Unknown client"})
-		writer.Write(output)
+		(&myError{error: "Unknown client"}).renderError(writer, request)
 		return
 	} else if Contains(clientId.RedirectURIS, request.URL.Query().Get("redirect_uri")) == false {
 		output, _ := json.Marshal(&myError{error: "Invalid redirect URI"})
@@ -140,7 +143,7 @@ func (c *appData) authorize(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	requestId := StringWithCharset(10, charset)
-	requests[requestId] = requestId
+	requests[requestId] = request.URL.Query()
 	authData := AuthData{clientId, requestId}
 	context := map[string]AuthData {
 		"auth": authData,
@@ -151,6 +154,37 @@ func (c *appData) authorize(writer http.ResponseWriter, request *http.Request) {
 	if error != nil {
 		log.Println(error)
 	}
+}
+
+func (c *appData) approve(writer http.ResponseWriter, request *http.Request) {
+	reqId := request.FormValue("reqid")
+	approved := request.FormValue("approve")
+	query, ok := requests[reqId]
+
+	if ok == false {
+		(&myError{error: "No matching authrozation request"}).renderError(writer, request)
+		return
+	}
+	clientId := c.getClient(query.Get("client_id"))
+	responseType := query.Get("response_type")
+	state := query.Get("state")
+
+	if len(approved) > 0 {
+		if responseType == "code" {
+			code := StringWithCharset(10, charset)
+			codes[code] = code
+
+			writer.Header().Set("location", fmt.Sprintf("%s?code=%s&state=%s", clientId.RedirectURIS[0], code, state))
+			writer.WriteHeader(http.StatusFound)
+		} else {
+			writer.Header().Set("location", fmt.Sprintf("%s?error=unsupported_responste_type", clientId.RedirectURIS[0]))
+			writer.WriteHeader(http.StatusFound)
+		}
+	} else {
+		writer.Header().Set("location", fmt.Sprintf("%s?error=accedd_denied", clientId.RedirectURIS[0]))
+		writer.WriteHeader(http.StatusFound)
+	}
+
 }
 
 func Contains(a []string, x string) bool {
