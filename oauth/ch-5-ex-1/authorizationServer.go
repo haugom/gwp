@@ -17,6 +17,9 @@ import (
 	"strings"
 	"time"
 )
+
+var sharedAccessTokenDatabase string
+
 type redirectURIS []string
 
 type client struct {
@@ -83,6 +86,8 @@ func StringWithCharset(length int, charset string) string {
 }
 
 func main() {
+
+	sharedAccessTokenDatabase = "/home/haugom/src/oauth-in-action-code/exercises/ch-5-ex-1/database.nosql"
 
 	firstClient := client{
 		"oauth client 1",
@@ -282,7 +287,13 @@ func (c *appData) token(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	randomToken := StringWithCharset(10, charset)
-	output, _ := json.Marshal(&TokenResponse{randomToken, "Bearer"})
+	accessToken := &TokenResponse{randomToken, "Bearer"}
+	output, _ := json.Marshal(accessToken)
+	outfile, _ := os.OpenFile(sharedAccessTokenDatabase, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
+	defer outfile.Close()
+	outfile.Write(output)
+	outfile.WriteString("\n")
+
 	writer.Header().Set("content-type", "application/json")
 	writer.Write(output)
 }
