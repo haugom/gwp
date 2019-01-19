@@ -1,7 +1,0 @@
----
-context: haugom
-global:
-  image_tag: 'debug'
-  hostname: mygo.k8s.cloud.haugom.org
-include: 
-  - name: debug

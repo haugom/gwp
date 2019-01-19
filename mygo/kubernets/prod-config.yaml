@@ -1,9 +1,0 @@
----
-context: haugom
-global:
-  url: https://mygo.k8s.cloud.haugom.org
-  client_id: to_be_inserted
-  client_secret: to_be_inserted
-  redis_key: to_be_inserted
-include: 
-  - name: config
