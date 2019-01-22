@@ -69,6 +69,7 @@ func New(text string) error {
 type AuthData struct {
 	Client client
 	ReqId string
+	Scopes []string
 }
 
 type TokenResponse struct {
@@ -109,11 +110,11 @@ func StringWithCharset(length int, charset string) string {
 
 func main() {
 
-	sharedAccessTokenDatabase = "/home/haugom/src/oauth-in-action-code/exercises/ch-5-ex-1/database.nosql"
+	sharedAccessTokenDatabase = "/home/haugom/src/oauth-in-action-code/exercises/ch-6-ex-1/database.nosql"
 
 	firstClient := client{
 		"oauth client 1",
-		"",
+		"foo bar",
 		"oauth-client-1",
 		"oauth-client-secret-1",
 		redirectURIS{"http://localhost:9000/callback"},
@@ -121,7 +122,7 @@ func main() {
 	}
 	secondClient := client{
 		"oauth client 2",
-		"",
+		"dex pex",
 		"oauth-client-2",
 		"oauth-client-secret-2",
 		redirectURIS{"http://localhost:9000/callback", "http://localhost:9000/callback2"},
@@ -229,7 +230,7 @@ func (c *appData) authorize(writer http.ResponseWriter, request *http.Request) {
 
 	requestId := StringWithCharset(10, charset)
 	requests[requestId] = request.URL.Query()
-	authData := AuthData{clientId, requestId}
+	authData := AuthData{clientId, requestId, strings.Fields(clientId.Scope)}
 	context := map[string]AuthData {
 		"auth": authData,
 	}
@@ -245,6 +246,22 @@ func (c *appData) approve(writer http.ResponseWriter, request *http.Request) {
 	reqId := request.FormValue("reqid")
 	approved := request.FormValue("approve")
 	query, ok := requests[reqId]
+	rscopes := make([]string, 0)
+
+	if err := request.ParseForm(); err != nil {
+		// handle error
+		(&myError{error: "Unexpected error: " + err.Error()}).renderError(writer, request)
+		return
+	}
+
+	for key, values := range request.PostForm {
+		if strings.HasPrefix(key, "scope_") {
+			left := strings.TrimLeft(key, "scope_")
+			if len(values[0]) > 0 && "on" == values[0] {
+				rscopes = append(rscopes, left)
+			}
+		}
+	}
 
 	if ok == false {
 		(&myError{error: "No matching authrozation request"}).renderError(writer, request)
