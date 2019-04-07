@@ -1,4 +1,3 @@
-
 package main
 
 import (
@@ -23,12 +22,12 @@ var sharedAccessTokenDatabase string
 type redirectURIS []string
 
 type client struct {
-	Name string `json:"name"`
-	Scope string `json:"scope"`
-	ClientID string `json:"client_id"`
-	ClientSecret string `json:"client_secret"`
+	Name         string       `json:"name"`
+	Scope        string       `json:"scope"`
+	ClientID     string       `json:"client_id"`
+	ClientSecret string       `json:"client_secret"`
 	RedirectURIS redirectURIS `json:"redirect_uris"`
-	LogoURI string `json:"logo_uri"`
+	LogoURI      string       `json:"logo_uri"`
 }
 
 type clientMap map[string]client
@@ -36,18 +35,24 @@ type clientMap map[string]client
 var allClients clientMap
 
 type RequestMap map[string]url.Values
+
 var requests RequestMap
 
 type AccessCode struct {
-	Code string
+	Code     string
 	ClientID string
 }
 
 type CodeMap map[string]AccessCode
+
 var codes CodeMap
+
 type RefreshTokenMap map[string]RefreshTokenResponse
+
 var refreshTokens RefreshTokenMap
+
 type AccessTokenMap map[string]AccessTokenResponse
+
 var accessTokens AccessTokenMap
 
 type appData struct {
@@ -58,7 +63,7 @@ type myError struct {
 	error string `json:"error"`
 }
 
-func (e * myError) Error() string {
+func (e *myError) Error() string {
 	return e.error
 }
 
@@ -68,30 +73,30 @@ func New(text string) error {
 
 type AuthData struct {
 	Client client
-	ReqId string
+	ReqId  string
 	Scopes []string
 }
 
 type TokenResponse struct {
-	AccessToken string `json:"access_token"`
-	TokenType string `json"token_type"`
-	Expires int64 `json:"expires_in"`
+	AccessToken  string `json:"access_token"`
+	TokenType    string `json"token_type"`
+	Expires      int64  `json:"expires_in"`
 	RefreshToken string `json:"refresh_token"`
 }
 
 type RefreshTokenResponse struct {
 	RefreshToken string `json:"refresh_token"`
-	ClientID string `json:"client_id"`
+	ClientID     string `json:"client_id"`
 }
 
 type AccessTokenResponse struct {
 	AccessToken string
-	ClientID string
+	ClientID    string
 }
 
 type AuthServer struct {
 	AuthorizationEndpoint string
-	TokenEndpoint string
+	TokenEndpoint         string
 }
 
 var seededRand *rand.Rand = rand.New(
@@ -138,7 +143,7 @@ func main() {
 	refreshTokens = make(RefreshTokenMap, 10)
 	accessTokens = make(AccessTokenMap, 10)
 
-	appData := appData{clients:&allClients}
+	appData := appData{clients: &allClients}
 
 	log.Println(appData.clients)
 
@@ -162,8 +167,8 @@ func main() {
 	mux.Handle("/refresh_token", stdChain.Then(refreshTokenHandler))
 
 	server := http.Server{
-		Addr: "127.0.0.1:9003",
-		Handler:        mux,
+		Addr:    "127.0.0.1:9003",
+		Handler: mux,
 	}
 	server.ListenAndServe()
 
@@ -202,7 +207,7 @@ func index(writer http.ResponseWriter, request *http.Request) {
 	}
 	a := struct {
 		AuthServer AuthServer
-		Clients []client
+		Clients    []client
 	}{authServer, clientsArray}
 
 	templates := template.Must(template.ParseFiles("templates/authorizationServer/index.html"))
@@ -231,7 +236,7 @@ func (c *appData) authorize(writer http.ResponseWriter, request *http.Request) {
 	requestId := StringWithCharset(10, charset)
 	requests[requestId] = request.URL.Query()
 	authData := AuthData{clientId, requestId, strings.Fields(clientId.Scope)}
-	context := map[string]AuthData {
+	context := map[string]AuthData{
 		"auth": authData,
 	}
 
@@ -279,7 +284,29 @@ func (c *appData) approve(writer http.ResponseWriter, request *http.Request) {
 			writer.Header().Set("location", fmt.Sprintf("%s?code=%s&state=%s", client.RedirectURIS[0], code, state))
 			writer.WriteHeader(http.StatusFound)
 		} else if responseType == "token" {
+			m, _ := time.ParseDuration("10s")
+			now := time.Now()
+			now = now.Add(m)
 
+			accessToken := StringWithCharset(10, charset)
+			accessTokens[accessToken] = AccessTokenResponse{
+				accessToken,
+				client.ClientID,
+			}
+			tokenResponse := &TokenResponse{
+				accessToken,
+				"Bearer",
+				now.Unix() * 1000,
+				"",
+			}
+			tokenResponseBytes, _ := json.Marshal(tokenResponse)
+			outfile, _ := os.OpenFile(sharedAccessTokenDatabase, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
+			defer outfile.Close()
+			outfile.Write(tokenResponseBytes)
+			outfile.WriteString("\n")
+
+			writer.Header().Set("location", fmt.Sprintf("%s#access_token=%s&token_type=%s&state=%s", client.RedirectURIS[0], accessToken, "Bearer", state))
+			writer.WriteHeader(http.StatusFound)
 		} else {
 			writer.Header().Set("location", fmt.Sprintf("%s?error=unsupported_response_type", client.RedirectURIS[0]))
 			writer.WriteHeader(http.StatusFound)
@@ -300,7 +327,7 @@ func (c *appData) token(writer http.ResponseWriter, request *http.Request) {
 		encodedCredentials := auth[len("basic "):len(auth)]
 		err, clientId, clientSecret = decodeCredentials(encodedCredentials)
 		if err != nil {
-			output, _ := json.Marshal(&myError{error:err.Error()})
+			output, _ := json.Marshal(&myError{error: err.Error()})
 			writer.Header().Set("content-type", "application/json")
 			writer.WriteHeader(http.StatusUnauthorized)
 			writer.Write(output)
@@ -376,7 +403,7 @@ func (c *appData) token(writer http.ResponseWriter, request *http.Request) {
 		tokenResponse := &TokenResponse{
 			accessToken,
 			"Bearer",
-			now.Unix()*1000,
+			now.Unix() * 1000,
 			refreshToken,
 		}
 		refreshTokenResponse := &RefreshTokenResponse{
@@ -423,7 +450,7 @@ func (c *appData) token(writer http.ResponseWriter, request *http.Request) {
 			tokenResponse := &TokenResponse{
 				accessToken,
 				"Bearer",
-				now.Unix()*1000,
+				now.Unix() * 1000,
 				refreshToken,
 			}
 			outfile, _ := os.OpenFile(sharedAccessTokenDatabase, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0644)
@@ -456,7 +483,7 @@ func tokens(writer http.ResponseWriter, request *http.Request) {
 		refreshTokensArray = append(refreshTokensArray, value)
 	}
 	a := struct {
-		AccessTokens []AccessTokenResponse
+		AccessTokens  []AccessTokenResponse
 		RefreshTokens []RefreshTokenResponse
 	}{tokensArray, refreshTokensArray}
 
