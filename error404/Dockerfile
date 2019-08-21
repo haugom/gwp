@@ -2,13 +2,12 @@
 FROM ubuntu:latest as init
 RUN useradd -u 10001 scratchuser
 
-FROM golang:1.11 as build
+FROM golang:1.12 as build
 WORKDIR /go/src/app
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"'
 
 FROM scratch as runtime
-#FROM golang:1.11 as runtime
 COPY --from=build /go/src/app/app /app/server
 COPY ./config.json /app/
 COPY ./media/ /app/media/
